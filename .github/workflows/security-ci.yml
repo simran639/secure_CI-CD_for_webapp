@@ -1,0 +1,110 @@
+name: ci-security
+
+on:
+  push:
+    branches: [ "**" ]
+  pull_request:
+    branches: [ "**" ]
+
+jobs:
+  # 1) Lint & Unit tests
+  lint_and_test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Start app for tests
+        run: npm start & sleep 3
+      - name: Basic ping check
+        run: curl -f http://localhost:3000/healthz
+
+  # 2) SAST with Semgrep
+  sast_semgrep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/ci
+            p/javascript
+            p/nodejs
+            p/security-audit
+          generateSarif: "1"
+          sarifFile: semgrep.sarif
+      - uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-sarif
+          path: semgrep.sarif
+
+  # 3) Secrets scanning with Gitleaks
+  secrets_gitleaks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: gitleaks/gitleaks-action@v2
+        with:
+          config-path: .gitleaks.toml
+          additional-args: --no-banner
+
+  # 4) Dependency audit (npm)
+  deps_audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - name: Audit prod deps (fail on high+)
+        run: |
+          npm audit --omit=dev --audit-level=high
+
+  # 5) Build image (no push) and scan with Trivy
+  image_build_and_scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t app:${{ github.sha }} .
+      - name: Trivy scan (fail on HIGH/CRITICAL)
+        run: |
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasecurity/trivy:latest image \
+            --ignore-unfixed --exit-code 1 --severity HIGH,CRITICAL app:${{ github.sha }}
+      - name: Trivy SBOM (CycloneDX JSON)
+        run: |
+          docker run --rm \
+            -v $PWD:/work anchore/syft:latest \
+            packages:app@docker --output cyclonedx-json > sbom.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom-cyclonedx
+          path: sbom.json
+
+  # 6) DAST with OWASP ZAP (against local app)
+  dast_zap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - name: Start app
+        run: npm run zap:serve & sleep 5
+      - name: ZAP Baseline Scan (HTML report)
+        run: |
+          docker run --rm --network host \
+            -v $PWD:/zap/wrk:rw owasp/zap2docker-stable \
+            zap-baseline.py -t http://localhost:3000 -r zap-report.html -m 3
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: zap-report.html

@@ -1,0 +1,17 @@
+{
+  "name": "devsecops-demo",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node src/app.js",
+    "test": "node --test",
+    "lint": "eslint .",
+    "zap:serve": "node src/app.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "eslint": "^8.57.1"
+  }
+}

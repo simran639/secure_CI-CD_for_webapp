@@ -1,0 +1,7 @@
+rules:
+- id: node-disabled-eval
+  patterns:
+    - pattern: eval(...)
+  message: "Avoid eval()"
+  severity: ERROR
+  languages: [javascript, typescript]
