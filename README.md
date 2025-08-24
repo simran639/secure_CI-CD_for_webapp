@@ -1,7 +1,5 @@
 # 🔐 DevSecOps Demo: Secure CI/CD Pipeline for a Web App
 
-![CI](https://github.com/simran639/devsecops-demo/actions/workflows/security-ci.yml/badge.svg)
-
 A beginner-friendly **DevSecOps project** that demonstrates how to integrate **security into every stage of the CI/CD pipeline** for a simple Node.js web application.
 
 This project shows how modern DevSecOps practices help detect:
